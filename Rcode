@@ -1,0 +1,156 @@
+require (timeSeries)
+require (fPortfolio)
+require (quantmod)
+require(caTools)
+
+require(fPortfolio)
+library(fPortfolio)
+require(timeSeries)
+library(timeSeries)
+
+library(foreach)
+library(DEoptim)
+library(iterators)
+library(fGarch)
+library(Rglpk)
+library(ROI)
+library(ROI.plugin.glpk)
+library(ROI.plugin.quadprog)
+pacman::p_load(tidyverse,tidyquant,PortfolioAnalytics,quantmod,PerformanceAnalytics,zoo,
+               plotly,timekit,ggthemes,quadprog)
+
+library(PortfolioAnalytics)
+library(quantmod)
+library(PerformanceAnalytics)
+library(zoo)
+library(plotly)
+
+
+library(flexdashboard)
+library(quantmod)
+library(xts)
+library(rvest)
+library(tidyverse)
+library(stringr)
+library(forcats)
+library(lubridate)
+library(plotly)
+library(corrplot)
+library(dplyr)
+library(magrittr)
+library(PerformanceAnalytics)
+library(flexdashboard)
+library(fPortfolio)
+library(tibble)
+
+
+TickerList <- c("MGLU3.SA",	"TGMA3.SA",	"TRPL4.SA",	"BKBR3.SA",	"LLIS3.SA",	"HYPE3.SA",	"LREN3.SA",	"MDIA3.SA",	"FESA4.SA",	"ABEV3.SA",	"CVCB3.SA",	"VVAR3.SA",	"VIVT4.SA",	"BRDT3.SA",	"CAML3.SA",	"BRML3.SA",	"STBP3.SA",	"SLCE3.SA",	"KLBN11.SA",	"LOGN3.SA",	"BRPR3.SA",	"AMAR3.SA",	"PETR3.SA",	"DTEX3.SA",	"PCAR4.SA",	"LEVE3.SA",	"ALSO3.SA",	"SMLS3.SA",	"SUZB3.SA",	"USIM5.SA",	"ROMI3.SA",	"BRFS3.SA",	"CMIG3.SA",	"RAPT3.SA",	"TESA3.SA",	"RENT3.SA")
+
+ClosingPricesRead <- NULL
+for (Ticker in TickerList)
+ClosingPricesRead <- cbind(ClosingPricesRead,
+getSymbols.yahoo(Ticker, from="2010-01-01",  to="2020-08-09", verbose=FALSE, auto.assign=FALSE)[,6]) # [,6] = keep the adjusted prices
+
+prices.data <- ClosingPricesRead[apply(ClosingPricesRead,1,function(x) all(!is.na(x))),]
+
+### ret normal
+returns.data <- as.timeSeries((tail(prices.data,-1) / as.numeric(head(prices.data,-1)))-1)
+Frontierise = portfolioFrontier(returns.data)
+frontierPlot(Frontierise, col = c("cyan", "yellow"), pch = 19)
+
+##ComposiÃ§Ã£o de PortfÃ³lio de Menor Risco
+p1ise = tangencyPortfolio(returns.data, spec = portfolioSpec(), constraints = "LongOnly")
+p1ise
+
+
+#####
+
+PortMenorRisco <- p1ise
+library("xlsx")
+dir.create("AllPortfolios", showWarnings = FALSE)               
+mywb <- createWorkbook()
+mysheet <- createSheet(mywb, sheetName="Portfolio")
+strcol <- 1
+mytitle <- data.frame(PortMenorRisco@title)
+addDataFrame(mytitle , mysheet, startRow=1, startColumn=strcol)
+myweights <- data.frame(PortMenorRisco@portfolio@portfolio$weights)
+addDataFrame(myweights , mysheet, startRow=3, startColumn=strcol)
+strcol <- strcol + 2
+
+mytgret <-  data.frame(PortMenorRisco@portfolio@portfolio$targetReturn)
+addDataFrame(mytgret , mysheet, startRow=3, startColumn=strcol)
+strcol <- strcol + 2
+mytgrisk <- data.frame(PortMenorRisco@portfolio@portfolio$targetRisk)
+addDataFrame(mytgrisk , mysheet, startRow=3, startColumn=strcol)
+strcol <- strcol + 2
+saveWorkbook(mywb, "./AllPortfolios/01-032-PortMenorRisco.xlsx")
+
+
+
+####
+ 
+
+
+tickers <- c(TickerList)
+weights <- c(0.208357043953054,	0,	0.156333907455408,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0.0610446956677584,	0,	0.142706886260696,	0,	0,	0,	0,	0,	0,	0.0926275851629215,	0,	0.158846778278676,	0,	0.0350091968877921,	0,	0.052632925997188,	0.0924409803365063,	0,	0)
+
+tail(prices.data)
+
+Port.returns <- ROC(prices.data, type="discrete")[-1,]
+head(Port.returns)
+colnames(Port.returns) <- tickers
+
+VaR(Port.returns, p=0.99, weights = weights, portfolio_method = "component", method="modified")
+CVaR(Port.returns, p=0.99, weights = weights, portfolio_method = "component", method="modified")
+ES(Port.returns, p=0.99, weights = weights, portfolio_method = "component", method="modified")
+ETL(Port.returns, p=0.99, weights = weights, portfolio_method = "component", method="modified")
+
+
+VAR.Hist <- VaR(Port.returns, p=0.95, weights = NULL, portfolio_method= "single", method="historical") 
+VAR.Hist
+
+VAR.Gaus <- VaR(Port.returns, p=0.95, weights = NULL, portfolio_method= "single", method="gaussian") 
+VAR.Gaus
+
+VAR.Mod <- VaR(Port.returns, p=0.95, weights = NULL, portfolio_method= "single", method="modified") 
+VAR.Mod
+
+ALL.VAR <- data.frame(rbind(VAR.Hist, VAR.Gaus, VAR.Mod))
+ALL.VAR
+
+rownames(ALL.VAR) <- c("Hist", "Gaus", "Mod")
+ALL.VAR
+library("xlsx")
+write.xlsx(ALL.VAR, file = "01-033-ALL.VAR.xlsx")
+
+PortVAR.Hist <- VaR(Port.returns, p=0.95, weights = weights, portfolio_method="component", method="historical")$hVaR
+PortVAR.Hist
+library("xlsx")
+write.xlsx(PortVAR.Hist, file = "01-034-PortVAR.Hist.xlsx")
+ 
+PortVAR.Gaus <- VaR(Port.returns, p=0.95, weights = weights, portfolio_method ="component", method="gaussian")$VaR
+PortVAR.Gaus
+library("xlsx")
+write.xlsx(PortVAR.Gaus, file = "01-035-PortVAR.Gaus.xlsx")
+  
+PortVAR.Mod <- VaR(Port.returns, p=0.95, weights = weights, portfolio_method ="component", method="modified")$MVaR
+PortVAR.Mod
+library("xlsx")
+write.xlsx(PortVAR.Mod, file = "01-036-PortVAR.Mod.xlsx")
+
+
+
+
+ALL.VAR$Portfolio <- 0
+ALL.VAR <- abs(ALL.VAR)
+ALL.VAR$Portfolio <- c(PortVAR.Hist, PortVAR.Gaus,PortVAR.Mod)
+
+ALL.VAR <- abs(ALL.VAR)
+ALL.VAR$Type <- c("Hist", "Gaus", "Mod")
+
+library(reshape2)
+library(ggplot2)
+plotVar <- melt(ALL.VAR, variable.name = "Ticker", value.name = "VaR")
+ggplot(plotVar, aes(x=Type, y=VaR, fill=Ticker)) + geom_bar(stat = "identity", position = "dodge")
+
+
